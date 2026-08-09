@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node / Next.js
+node_modules/
+.next/
+.next-bak*
+*.tsbuildinfo
+
+# 根目录误生成的 package-lock（实际 npm 项目在 web/frontend/）
+/package-lock.json
+
+# 运行时数据 / 缓存
+data/
+web/backend/data/
+market_data/data/
+*.db
+*.log
+_q.json
+
+# AI 助手工作区
+.workbuddy/
+
+# OS
+.DS_Store
+Thumbs.db
