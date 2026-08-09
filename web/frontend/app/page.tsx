@@ -3,8 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import StockSearch from "../components/StockSearch";
 import PriceChart from "../components/PriceChart";
 import SubChart, { SUB_LABELS, type SubIndicator } from "../components/SubChart";
-import { getHistory } from "../lib/api";
-import type { QuoteRecord, StockItem } from "../lib/types";
+import IntradayChart from "../components/IntradayChart";
+import InfoPanel from "../components/InfoPanel";
+import { getHistory, getMinuteData, getStockInfo } from "../lib/api";
+import type { QuoteRecord, StockItem, MinuteRecord, StockInfo } from "../lib/types";
 
 function fmt(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -57,6 +59,8 @@ export default function Page() {
   const [meta, setMeta] = useState<{ code: string; name: string; count: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [minuteData, setMinuteData] = useState<MinuteRecord[]>([]);
+  const [stockInfo, setStockInfo] = useState<StockInfo | null>(null);
 
   // 内部：查询最早日期（含预热）、可见窗口百分比、补取锁、防抖
   const dataRef = useRef<QuoteRecord[]>([]);
@@ -181,12 +185,28 @@ export default function Page() {
   // 首次加载默认标的（近 20 天）
   useEffect(() => {
     doQuery(viewStart, viewEnd);
+    fetchExtras(stock?.code || "600519", adjust);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 拉取分时数据 + 公司信息（与日线查询独立，仅跟股票代码/复权相关）
+  const fetchExtras = useCallback(async (code: string, adj: "qfq" | "hfq" | "") => {
+    try {
+      const [m, info] = await Promise.all([
+        getMinuteData(code, "1", adj),
+        getStockInfo(code),
+      ]);
+      setMinuteData(m.data);
+      setStockInfo(info);
+    } catch {
+      /* 分时/信息获取失败不影响主图 */
+    }
   }, []);
 
   const handleSelect = (s: StockItem) => {
     setStock(s);
     doQuery(viewStart, viewEnd, s.code);
+    fetchExtras(s.code, adjust);
   };
 
   const handleQueryClick = () => doQuery(viewStart, viewEnd);
@@ -194,6 +214,7 @@ export default function Page() {
   const handleAdjustChange = (v: "qfq" | "hfq" | "") => {
     setAdjust(v);
     doQuery(viewStart, viewEnd, stock?.code, v);
+    fetchExtras(stock?.code || "600519", v);
   };
 
   const handleDateChange = (which: "start" | "end", val: string) => {
@@ -286,39 +307,53 @@ export default function Page() {
           </span>
         </div>
 
-        <section className="main-chart" style={{ flex: `${mainRatio} 1 0%` }}>
-          <PriceChart
-            data={data}
-            displayMode={displayMode}
-            yAxisType={yAxisType}
-            yAxisRange={yAxisRange}
-            showBoll={showBoll}
-            showNine={showNine}
-            showSR={showSR}
-            showGap={showGap}
-            visRange={visRange}
-            onDataZoom={handleDataZoom}
-          />
+        {/* 主图行：2/3 日线主图 + 1/3 分时K线 */}
+        <section className="main-row" style={{ flex: `${mainRatio} 1 0%` }}>
+          <div className="main-chart">
+            <PriceChart
+              data={data}
+              displayMode={displayMode}
+              yAxisType={yAxisType}
+              yAxisRange={yAxisRange}
+              showBoll={showBoll}
+              showNine={showNine}
+              showSR={showSR}
+              showGap={showGap}
+              visRange={visRange}
+              onDataZoom={handleDataZoom}
+            />
+          </div>
+          <div className="side-chart intraday-chart">
+            <div className="subchart-head"><span className="label">分时（最近交易日）</span></div>
+            <IntradayChart data={minuteData} />
+          </div>
         </section>
 
         <div className="splitter" onMouseDown={onSplitMouseDown} title="拖拽调整主图高度" />
 
-        <section className="subcharts" style={{ flex: `${1 - mainRatio} 1 0%` }}>
-          {[0, 1, 2].map((i) => (
-            <div className="subchart" key={i}>
-              <div className="subchart-head">
-                <span className="label">子图 {i + 1}</span>
-                <select value={subIndicators[i]} onChange={(e) => setSub(i, e.target.value as SubIndicator)}>
-                  {SUB_LABELS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+        {/* 子图行：3/4 技术指标子图 + 1/4 公司信息 */}
+        <section className="sub-row" style={{ flex: `${1 - mainRatio} 1 0%` }}>
+          <div className="subcharts">
+            {[0, 1, 2].map((i) => (
+              <div className="subchart" key={i}>
+                <div className="subchart-head">
+                  <span className="label">子图 {i + 1}</span>
+                  <select value={subIndicators[i]} onChange={(e) => setSub(i, e.target.value as SubIndicator)}>
+                    {SUB_LABELS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <SubChart data={data} indicator={subIndicators[i]} />
               </div>
-              <SubChart data={data} indicator={subIndicators[i]} />
-            </div>
-          ))}
+            ))}
+          </div>
+          <div className="side-chart info-chart">
+            <div className="subchart-head"><span className="label">公司信息</span></div>
+            <InfoPanel info={stockInfo} />
+          </div>
         </section>
       </main>
 
