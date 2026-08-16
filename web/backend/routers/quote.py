@@ -36,3 +36,24 @@ def quote_history(
         raise UpstreamError(f"行情获取失败: {e}")
     result["name"] = name
     return result
+
+
+@router.get("/quote/status")
+def quote_status(
+    code: str = Query(..., min_length=1),
+    period: str = Query("1"),
+    adjust: str = Query("qfq"),
+):
+    """查询最近一个交易日的分时数据（1/5/15/30/60 分钟）。"""
+    if adjust not in _ALLOW_ADJUST:
+        raise ValidationError(f"adjust 仅支持 {sorted(_ALLOW_ADJUST)}")
+    try:
+        result = market.get_status(
+            code,
+            period=period,
+            adjust=adjust,
+            data_dir=get_settings().backend_data_dir,
+        )
+    except Exception as e:  # noqa: BLE001
+        raise UpstreamError(f"分时数据获取失败: {e}")
+    return result

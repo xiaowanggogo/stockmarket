@@ -54,15 +54,22 @@ export interface MinuteResponse {
 export interface StockInfo {
   name: string;
   code: string;
+  current_price: number | null;
   market_cap: number | null;
   circ_market_cap: number | null;
   pe_dynamic: number | null;
   pe_ttm: number | null;
-  pe_static: number | null;
-  dividend_yield_dynamic: number | null;
+  pb: number | null;
   dividend_yield_ttm: number | null;
-  dividend_yield_static: number | null;
   relative_valuation: number | null;
-  concept_boards: string;
   industry_board: string;
+  concept_boards: string;
+  boards: string;
+  target_price: number | null;
+  latest_rating: string | null;
+  rating_date: string | null;
+  hk_code: string | null;
+  hk_name: string | null;
+  hk_price: number | null;
+  data_sources: string;
 }

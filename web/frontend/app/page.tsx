@@ -43,7 +43,8 @@ export default function Page() {
   const [viewStart, setViewStart] = useState(shift(fmt(today), -INIT_WINDOW));
   const [viewEnd, setViewEnd] = useState(fmt(today));
   const [adjust, setAdjust] = useState<"qfq" | "hfq" | "">("qfq");
-  const [mainRatio, setMainRatio] = useState(0.42); // 主图占比（可拖拽调整）
+  const [mainH, setMainH] = useState(420); // 主图高度（px，可拖拽放大/缩小）
+  const [subH, setSubH] = useState(540); // 子图行高度（px，可向下拖拽放大；默认抬高以便一打开看清量化/信息）
 
   const [displayMode, setDisplayMode] = useState<"kline" | "line">("kline");
   const [yAxisType, setYAxisType] = useState<"normal" | "log">("normal");
@@ -70,17 +71,20 @@ export default function Page() {
   const visTimer = useRef<any>(null);
   const chartAreaRef = useRef<HTMLDivElement | null>(null);
 
-  // 主图高度可调：拖拽 splitter 调整 mainRatio
-  const onSplitMouseDown = (e: React.MouseEvent) => {
+  // 高度拖拽：通用手柄。按像素增量调整目标高度（无地板、无上限，可突破视口并整体滚动）
+  const MIN_PANEL_H = 120;
+  const MAX_PANEL_H = 6000;
+  const onResizeDown = (
+    e: React.MouseEvent,
+    getVal: () => number,
+    setVal: (v: number) => void
+  ) => {
     e.preventDefault();
-    const area = chartAreaRef.current;
-    if (!area) return;
+    const startY = e.clientY;
+    const start = getVal();
     const onMove = (ev: MouseEvent) => {
-      const rect = area.getBoundingClientRect();
-      const titleH = 28; // title-bar 近似高度
-      const y = ev.clientY - rect.top - titleH;
-      const usable = rect.height - titleH - 10; // 减去 gap
-      if (usable > 0) setMainRatio(Math.max(0.15, Math.min(0.85, y / usable)));
+      const dy = ev.clientY - startY;
+      setVal(Math.max(MIN_PANEL_H, Math.min(MAX_PANEL_H, start + dy)));
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
@@ -307,8 +311,8 @@ export default function Page() {
           </span>
         </div>
 
-        {/* 主图行：2/3 日线主图 + 1/3 分时K线 */}
-        <section className="main-row" style={{ flex: `${mainRatio} 1 0%` }}>
+        {/* 主图行：2/3 日线主图 + 1/3 分时K线（高度独立可调） */}
+        <section className="main-row" style={{ height: mainH, flex: "none" }}>
           <div className="main-chart">
             <PriceChart
               data={data}
@@ -329,32 +333,36 @@ export default function Page() {
           </div>
         </section>
 
-        <div className="splitter" onMouseDown={onSplitMouseDown} title="拖拽调整主图高度" />
+        <div className="splitter" onMouseDown={(e) => onResizeDown(e, () => mainH, setMainH)} title="拖拽调整主图高度（向下放大）" />
 
-        {/* 子图行：3/4 技术指标子图 + 1/4 公司信息 */}
-        <section className="sub-row" style={{ flex: `${1 - mainRatio} 1 0%` }}>
-          <div className="subcharts">
-            {[0, 1, 2].map((i) => (
-              <div className="subchart" key={i}>
-                <div className="subchart-head">
-                  <span className="label">子图 {i + 1}</span>
-                  <select value={subIndicators[i]} onChange={(e) => setSub(i, e.target.value as SubIndicator)}>
-                    {SUB_LABELS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
+        {/* 子图行：2/3 量化指标子图（3 指标纵向堆叠）+ 1/3 公司信息；高度独立可调、可向下放大、整体滚动 */}
+        <section className="sub-row" style={{ height: subH, flex: "none" }}>
+          <div className="quant-panel">
+            <div className="panel-head"><span className="label">量化指标子图</span></div>
+            <div className="quant-charts">
+              {[0, 1, 2].map((i) => (
+                <div className="quant-chart" key={i}>
+                  <div className="subchart-head">
+                    <select value={subIndicators[i]} onChange={(e) => setSub(i, e.target.value as SubIndicator)}>
+                      {SUB_LABELS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <SubChart data={data} indicator={subIndicators[i]} />
                 </div>
-                <SubChart data={data} indicator={subIndicators[i]} />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           <div className="side-chart info-chart">
             <div className="subchart-head"><span className="label">公司信息</span></div>
             <InfoPanel info={stockInfo} />
           </div>
         </section>
+
+        <div className="splitter" onMouseDown={(e) => onResizeDown(e, () => subH, setSubH)} title="拖拽向下放大量化指标子图 / 公司信息（整体滚动）" />
       </main>
 
       <footer className="status-bar">

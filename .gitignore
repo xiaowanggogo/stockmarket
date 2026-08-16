@@ -8,6 +8,8 @@ __pycache__/
 node_modules/
 .next/
 .next-bak*
+# 沙箱为绕过 safe-delete 把 .next 重命名的残留，纯构建缓存，不可提交
+.next_rm
 *.tsbuildinfo
 
 # 根目录误生成的 package-lock（实际 npm 项目在 web/frontend/）

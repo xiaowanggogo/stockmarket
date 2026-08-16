@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Query
 
 from ..config import get_settings
-from ..services import stock_universe
+from ..services import market, stock_universe
 
 router = APIRouter()
 
@@ -44,3 +44,13 @@ def refresh_universe():
     """强制重新抓取并缓存全量 A 股列表（含拼音索引）。"""
     index = stock_universe.load_universe(get_settings().stock_cache_file, force=True)
     return {"total": len(index), "message": "已刷新股票列表缓存"}
+
+
+@router.get("/stock/info")
+def stock_info(code: str = Query(..., min_length=1)):
+    """查询股票及公司信息（市值/市盈率/股息率/行业等）。"""
+    try:
+        info = market.get_info(code.strip(), data_dir=get_settings().backend_data_dir)
+    except Exception as e:  # noqa: BLE001
+        return {"code": code.strip(), "error": str(e)}
+    return info
