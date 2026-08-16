@@ -21,7 +21,7 @@ if _REPO_ROOT not in sys.path:
 from .config import get_settings  # noqa: E402
 from .errors import register_error_handlers  # noqa: E402
 from .logging_setup import RequestIDMiddleware, setup_logging  # noqa: E402
-from .routers import quote, stock  # noqa: E402
+from .routers import quote, stock, watchlist  # noqa: E402
 from .services import stock_universe  # noqa: E402
 
 settings = get_settings()
@@ -40,6 +40,7 @@ app.add_middleware(
 
 app.include_router(stock.router, prefix="/api")
 app.include_router(quote.router, prefix="/api")
+app.include_router(watchlist.router, prefix="/api")
 register_error_handlers(app)
 
 

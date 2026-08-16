@@ -6,6 +6,9 @@ import SubChart, { SUB_LABELS, type SubIndicator } from "../components/SubChart"
 import IntradayChart from "../components/IntradayChart";
 import InfoPanel from "../components/InfoPanel";
 import { getHistory, getMinuteData, getStockInfo } from "../lib/api";
+import { useWatchlist } from "../lib/watchlist";
+import AddToWatchlist from "../components/AddToWatchlist";
+import WatchlistDrawer from "../components/WatchlistDrawer";
 import type { QuoteRecord, StockItem, MinuteRecord, StockInfo } from "../lib/types";
 
 function fmt(d: Date): string {
@@ -35,7 +38,13 @@ function mergeByDate(a: QuoteRecord[], b: QuoteRecord[]): QuoteRecord[] {
 const FLOOR_DATE = "1991-01-01"; // A 股最早上市时间附近，作为向前补取下限
 const WARMUP_DAYS = 60; // 预热天数（用于 BOLL/KDJ 等指标的前置数据，不显示在日期框）
 const MIN_WINDOW = 20; // 最小可见窗口（日历日）
-const INIT_WINDOW = 20; // 初始可见窗口（日历日）
+const INIT_WINDOW = 30; // 初始可见窗口（日历日）：展示最新交易日及其过去 30 天
+
+// 默认窗口：最新交易日及其前 30 天（end=今天，后端会截断到最近交易日）
+function defaultWindow(): [string, string] {
+  const t = new Date();
+  return [shift(fmt(t), -INIT_WINDOW), fmt(t)];
+}
 
 export default function Page() {
   const today = new Date();
@@ -54,6 +63,35 @@ export default function Page() {
   const [showSR, setShowSR] = useState(true);
   const [showGap, setShowGap] = useState(false);
   const [subIndicators, setSubIndicators] = useState<SubIndicator[]>(["volume", "turnover", "macd"]);
+
+  // 自选股（localStorage 持久化）
+  const wl = useWatchlist();
+  const [showAddWL, setShowAddWL] = useState(false);
+  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const newGroupRef = useRef<HTMLDivElement>(null);
+  const [showDrawer, setShowDrawer] = useState(false);
+
+  // 新建分组弹层：点击外部关闭
+  useEffect(() => {
+    if (!showNewGroup) return;
+    const onDoc = (e: MouseEvent) => {
+      if (newGroupRef.current && !newGroupRef.current.contains(e.target as Node)) {
+        setShowNewGroup(false);
+        setNewGroupName("");
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [showNewGroup]);
+
+  const createGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    wl.addGroup(name);
+    setNewGroupName("");
+    setShowNewGroup(false);
+  };
 
   const [data, setData] = useState<QuoteRecord[]>([]);
   const [visRange, setVisRange] = useState<{ s: number; e: number }>({ s: 0, e: 100 });
@@ -186,9 +224,10 @@ export default function Page() {
     [extendLeft]
   );
 
-  // 首次加载默认标的（近 20 天）
+  // 首次加载默认标的（最新交易日及其前 30 天）
   useEffect(() => {
-    doQuery(viewStart, viewEnd);
+    const [vs, ve] = defaultWindow();
+    doQuery(vs, ve);
     fetchExtras(stock?.code || "600519", adjust);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -209,26 +248,20 @@ export default function Page() {
 
   const handleSelect = (s: StockItem) => {
     setStock(s);
-    doQuery(viewStart, viewEnd, s.code);
+    const [vs, ve] = defaultWindow();
+    doQuery(vs, ve, s.code);
     fetchExtras(s.code, adjust);
   };
 
-  const handleQueryClick = () => doQuery(viewStart, viewEnd);
+  const handleQueryClick = () => {
+    const [vs, ve] = defaultWindow();
+    doQuery(vs, ve);
+  };
 
   const handleAdjustChange = (v: "qfq" | "hfq" | "") => {
     setAdjust(v);
     doQuery(viewStart, viewEnd, stock?.code, v);
     fetchExtras(stock?.code || "600519", v);
-  };
-
-  const handleDateChange = (which: "start" | "end", val: string) => {
-    if (which === "start") {
-      setViewStart(val);
-      doQuery(val, viewEnd);
-    } else {
-      setViewEnd(val);
-      doQuery(viewStart, val);
-    }
   };
 
   const setSub = (idx: number, val: SubIndicator) => {
@@ -274,21 +307,18 @@ export default function Page() {
           </div>
         </div>
 
-        {/* 正上：搜索框 */}
+        {/* 正上：搜索框 + 紧跟查询按钮 */}
         <div className="topbar-center">
-          <StockSearch onSelect={handleSelect} />
+          <div className="search-row">
+            <StockSearch onSelect={handleSelect} />
+            <button onClick={handleQueryClick} disabled={loading}>
+              {loading ? "查询中…" : "查询"}
+            </button>
+          </div>
         </div>
 
-        {/* 右上：日期区间（=可见窗口）+ 复权 + 查询 */}
+        {/* 右上：复权 + 新建分组 + 添加自选 + 自选股抽屉 */}
         <div className="topbar-right">
-          <div className="control">
-            <label className="ctl-label">起</label>
-            <input type="date" value={viewStart} onChange={(e) => handleDateChange("start", e.target.value)} />
-          </div>
-          <div className="control">
-            <label className="ctl-label">止</label>
-            <input type="date" value={viewEnd} onChange={(e) => handleDateChange("end", e.target.value)} />
-          </div>
           <div className="control">
             <label className="ctl-label">复权</label>
             <select value={adjust} onChange={(e) => handleAdjustChange(e.target.value as any)}>
@@ -297,9 +327,33 @@ export default function Page() {
               <option value="">不复权</option>
             </select>
           </div>
-          <button onClick={handleQueryClick} disabled={loading}>
-            {loading ? "查询中…" : "查询"}
-          </button>
+          <div className="wl-add-wrap">
+            <button onClick={() => setShowNewGroup((v) => !v)}>＋ 新建分组</button>
+            {showNewGroup && (
+              <div className="wl-popover" ref={newGroupRef}>
+                <div className="wl-pop-title">新建分组</div>
+                <div className="wl-pop-new">
+                  <input
+                    autoFocus
+                    placeholder="分组名称"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") createGroup();
+                    }}
+                  />
+                  <button onClick={createGroup}>创建</button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="wl-add-wrap">
+            <button onClick={() => setShowAddWL((v) => !v)}>★ 添加自选</button>
+            {showAddWL && (
+              <AddToWatchlist stock={stock} wl={wl} onClose={() => setShowAddWL(false)} />
+            )}
+          </div>
+          <button onClick={() => setShowDrawer(true)}>☰ 自选股</button>
         </div>
       </header>
 
@@ -376,6 +430,8 @@ export default function Page() {
           "就绪"
         )}
       </footer>
+
+      <WatchlistDrawer open={showDrawer} wl={wl} onSelect={handleSelect} onClose={() => setShowDrawer(false)} />
     </div>
   );
 }

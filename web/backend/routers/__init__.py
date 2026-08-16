@@ -1,4 +1,4 @@
 """Routers package."""
-from . import quote, stock
+from . import quote, stock, watchlist
 
-__all__ = ["stock", "quote"]
+__all__ = ["stock", "quote", "watchlist"]

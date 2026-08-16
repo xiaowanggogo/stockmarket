@@ -190,6 +190,14 @@ print(info["name"], info["current_price"], info["pe_ttm"])
 | GET | `/api/stock/resolve?code=` | 代码解析名称 |
 | GET | `/api/stock/list?offset=&limit=` | 分页列出股票池 |
 | POST | `/api/stock/universe/refresh` | 强制刷新全量股票列表缓存 |
+| GET | `/api/watchlist` | 获取全部自选分组 |
+| POST | `/api/watchlist/groups` | 新建分组（`{name}`） |
+| DELETE | `/api/watchlist/groups/{id}` | 删除分组（保留至少一个） |
+| PATCH | `/api/watchlist/groups/{id}` | 重命名分组（`{name}`） |
+| POST | `/api/watchlist/groups/{id}/stocks` | 向分组添加股票（`{code,name}`，去重） |
+| DELETE | `/api/watchlist/groups/{id}/stocks/{code}` | 从分组移除股票 |
+| POST | `/api/watchlist/groups/{id}/toggle` | 切换股票在分组内的归属（有则删、无则加） |
+| POST | `/api/watchlist/import` | 整体替换分组（从浏览器 localStorage 一次性迁移） |
 
 ---
 
@@ -200,9 +208,10 @@ print(info["name"], info["current_price"], info["pe_ttm"])
 | 行情 SQLite 缓存 | `web/backend/data/market_data.db` | 日线/分时被查询后写入，减少重复上游请求 |
 | 行情诊断日志 | `web/backend/data/market_data.log` | 各源调用与故障切换记录 |
 | 股票池缓存 | `web/backend/data/stocks.json` | 全量 A 股代码/名称/拼音，首次启动抓取并缓存（< 3000 条视为不完整会重建） |
+| 自选股与分组 | `web/backend/data/watchlist.json` | 用户本地自选与分组；首次访问自动播种默认分组「我的自选」，**磁盘持久化、随项目迁移、不绑浏览器** |
 | 临时缓存 | 仓库根 `data/`、`_q.json` | 作为 Python 库单独调用时生成；已被 `.gitignore` 忽略，不入库 |
 
-以上 `web/backend/data/` 均由服务运行期自动生成，已加入 `.gitignore`。
+所有本地数据（行情 db、股票池、自选股）统一收口于 `web/backend/data/`，均由服务运行期自动生成，已加入 `.gitignore`（个人数据不入库）。此前自选股存于浏览器 `localStorage`，现已归一为服务端磁盘存储。
 
 ---
 

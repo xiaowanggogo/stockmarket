@@ -1,4 +1,4 @@
 """Services package."""
-from . import market, stock_universe
+from . import market, stock_universe, watchlist
 
-__all__ = ["market", "stock_universe"]
+__all__ = ["market", "stock_universe", "watchlist"]
